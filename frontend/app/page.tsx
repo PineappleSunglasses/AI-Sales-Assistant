@@ -149,10 +149,9 @@ const workflow = [
   { id: "submit", title: "Submit", detail: "Upload & confirm" },
 ] satisfies Array<{ id: PageId; title: string; detail: string }>;
 
-const baselineForecast = 45;
-const insiderImpact = 1.6;
-const divisionAdjustment = 0.5;
-const riskDiscount = -2.5;
+const bookedOrderIntakeYtd = 18.6;
+const recurringDemandForecast = 10.8;
+const unidentifiedRunRate = 17.4;
 const planningLow = 42;
 const planningHigh = 55;
 
@@ -348,8 +347,8 @@ function Sidebar({
             <dd>{money(planningLow)} - {money(planningHigh)}</dd>
           </div>
           <div>
-            <dt>Baseline (v0)</dt>
-            <dd>{money(baselineForecast)}</dd>
+            <dt>Booked YTD</dt>
+            <dd>{money(bookedOrderIntakeYtd)}</dd>
           </div>
           <div>
             <dt>Last Updated</dt>
@@ -388,13 +387,13 @@ function SalesInputsTab({
       </section>
 
       <section className="statsGrid four">
-        <StatCard label="Baseline OI (v0)" value={money(baselineForecast)} detail="As of 20 May 2026">
+        <StatCard label="Booked OI YTD" value={money(bookedOrderIntakeYtd)} detail="First 3 months closed">
           <Sparkline tone="neutral" />
         </StatCard>
-        <StatCard label="Draft uplift" value="+EUR 3.1M" detail="+6.9% vs baseline" tone="positive">
+        <StatCard label="Named opportunities" value="+EUR 3.5M" detail="Visible customer signals" tone="positive">
           <Sparkline tone="positive" />
         </StatCard>
-        <StatCard label="Open items" value="4" detail="Require review" tone="neutral">
+        <StatCard label="Unidentified run-rate" value={money(unidentifiedRunRate)} detail="AI inferred from YTD momentum" tone="neutral">
           <div className="miniMeter"><span /></div>
         </StatCard>
         <StatCard label="Evidence coverage" value="68%" detail="Across active signals" tone="neutral">
@@ -754,18 +753,28 @@ function getForecastSummary(entries: SalesEntry[], articles: Article[]) {
     .filter((article) => article.mark === "Important")
     .reduce((sum, article) => sum + article.impact, 0);
 
-  const customerIntent = entries
-    .filter((entry) => entry.used && entry.type === "Customer likely to order")
+  const namedOpportunities = entries
+    .filter((entry) => entry.used && entry.impact > 0)
+    .reduce((sum, entry) => sum + entry.impact, 0);
+
+  const knownRisksAndOneOffs = entries
+    .filter((entry) => entry.used && entry.impact < 0)
     .reduce((sum, entry) => sum + entry.impact, 0);
 
   const revisedForecast =
-    baselineForecast + customerIntent + insiderImpact + marketImpact + divisionAdjustment + riskDiscount;
+    bookedOrderIntakeYtd +
+    namedOpportunities +
+    recurringDemandForecast +
+    unidentifiedRunRate +
+    marketImpact +
+    knownRisksAndOneOffs;
 
   return {
-    customerIntent,
+    knownRisksAndOneOffs,
     marketImpact,
+    namedOpportunities,
     revisedForecast,
-    totalChange: revisedForecast - baselineForecast,
+    remainingForecast: revisedForecast - bookedOrderIntakeYtd,
   };
 }
 
@@ -778,15 +787,21 @@ function ForecastReasoningTab({
   articles: Article[];
   onNext: () => void;
 }) {
-  const { customerIntent, marketImpact, revisedForecast, totalChange } = getForecastSummary(entries, articles);
+  const {
+    knownRisksAndOneOffs,
+    marketImpact,
+    namedOpportunities,
+    remainingForecast,
+    revisedForecast,
+  } = getForecastSummary(entries, articles);
 
   const drivers = [
-    { label: "Baseline forecast (v0)", value: baselineForecast, type: "total" },
-    { label: "Customer intent", value: customerIntent, type: "up" },
-    { label: "Insider note", value: insiderImpact, type: "up" },
-    { label: "Market news", value: marketImpact, type: marketImpact >= 0 ? "up" : "down" },
-    { label: "Division adjustment", value: divisionAdjustment, type: "up" },
-    { label: "Risk discount", value: riskDiscount, type: "down" },
+    { label: "Booked OI YTD", value: bookedOrderIntakeYtd, type: "total" },
+    { label: "Named opps.", value: namedOpportunities, type: "up" },
+    { label: "Recurring demand", value: recurringDemandForecast, type: "up" },
+    { label: "Run-rate demand", value: unidentifiedRunRate, type: "up" },
+    { label: "Market adj.", value: marketImpact, type: marketImpact >= 0 ? "up" : "down" },
+    { label: "Risks & one-offs", value: knownRisksAndOneOffs, type: "down" },
   ];
   const confidence = revisedForecast >= planningLow && revisedForecast <= planningHigh ? "High" : "Medium";
 
@@ -798,10 +813,14 @@ function ForecastReasoningTab({
           <h1>{money(revisedForecast)}</h1>
         </div>
         <div className="forecastMetric">
-          <span>vs. Baseline (v0)</span>
-          <strong className={totalChange >= 0 ? "positiveText" : "negativeText"}>
-            {compactImpact(totalChange)} ({((totalChange / baselineForecast) * 100).toFixed(1)}%)
-          </strong>
+          <span>Already booked</span>
+          <strong className="positiveText">{money(bookedOrderIntakeYtd)}</strong>
+          <small>First 3 months</small>
+        </div>
+        <div className="forecastMetric">
+          <span>Remaining forecast</span>
+          <strong>{money(remainingForecast)}</strong>
+          <small>Named, recurring, run-rate, research</small>
         </div>
         <div className="forecastMetric">
           <span>Confidence</span>
@@ -823,7 +842,7 @@ function ForecastReasoningTab({
 
       <div className="contentGrid forecastGrid">
         <section className="panel">
-          <SectionHeader title="Forecast Bridge: Baseline to Revised Forecast" />
+          <SectionHeader title="Forecast Composition: Known, Expected, and Inferred OI" />
           <WaterfallChart drivers={drivers} revisedForecast={revisedForecast} />
         </section>
         <section className="panel">
@@ -831,33 +850,33 @@ function ForecastReasoningTab({
           <div className="reasonList">
             <ReasonRow
               evidence="Sales note"
-              impact={customerIntent}
-              title="Customer intent signals strong demand"
-              text="Key customers indicate high likelihood to place orders in H1 FY26/27."
+              impact={namedOpportunities}
+              title="Named customer opportunities"
+              text="Visible customer signals include Vodafone UK and CAF framework renewal demand."
             />
             <ReasonRow
-              evidence="Sales note"
-              impact={insiderImpact}
-              title="Insider note confirms budget availability"
-              text="Internal update from procurement contact confirms funding approved."
+              evidence="Historical pattern"
+              impact={recurringDemandForecast}
+              title="Recurring demand kept separate"
+              text="Repeat business is included only where historical buying patterns support it."
+            />
+            <ReasonRow
+              evidence="YTD momentum"
+              impact={unidentifiedRunRate}
+              title="Unidentified demand inferred from run-rate"
+              text="Higher first-quarter bookings support an inferred pipeline for orders not yet named."
             />
             <ReasonRow
               evidence="Important article"
               impact={marketImpact}
-              title="Market news supports growth outlook"
+              title="Market research adjustment"
               text="Reviewed market evidence supports investment in 5G and secure communications."
             />
             <ReasonRow
-              evidence="BP corridor"
-              impact={divisionAdjustment}
-              title="Division adjustment applied"
-              text="Strategic uplift for Test & Measurement division growth priority."
-            />
-            <ReasonRow
               evidence="Sales note"
-              impact={riskDiscount}
-              title="Risk discount for delays and renewals"
-              text="Renewal risk and delayed tender timing increase downside risk."
+              impact={knownRisksAndOneOffs}
+              title="Known risks and one-offs removed"
+              text="Renewal risk, delayed tender timing, and non-recurring orders reduce the forecast."
             />
           </div>
         </section>
@@ -889,15 +908,15 @@ function ForecastReasoningTab({
           <SectionHeader title="Refine forecast" />
           <div className="message userMessage">
             <strong>You</strong>
-            <p>The risk discount feels a bit high. BT is delayed, but we expect strong Q3 recovery. Can we reduce the risk impact?</p>
+            <p>The unidentified run-rate feels conservative. The first three months are much stronger than last year. Can we increase the inferred demand for the remaining months?</p>
           </div>
           <div className="message aiMessage">
             <strong>AI Assistant</strong>
-            <p>Reducing the risk discount by EUR 0.8M keeps the forecast within the planning corridor.</p>
+            <p>Increasing the unidentified run-rate by EUR 0.8M keeps the forecast within the planning corridor and documents the confidence assumption.</p>
           </div>
           <div className="proposalBox">
             <span>Proposed adjustment</span>
-            <strong>Reduce risk discount</strong>
+            <strong>Increase run-rate assumption</strong>
             <em>New forecast {money(revisedForecast + 0.8)}</em>
           </div>
           <div className="buttonRow">
@@ -924,7 +943,7 @@ function ReviewPage({
   articles: Article[];
   onNext: () => void;
 }) {
-  const { revisedForecast, totalChange } = getForecastSummary(entries, articles);
+  const { remainingForecast, revisedForecast } = getForecastSummary(entries, articles);
   const importantArticles = articles.filter((article) => article.mark === "Important");
   const usedEntries = entries.filter((entry) => entry.used);
 
@@ -938,10 +957,10 @@ function ReviewPage({
       </section>
 
       <section className="statsGrid four">
-        <StatCard label="Forecast to submit" value={money(revisedForecast)} detail={`${compactImpact(totalChange)} vs baseline`} tone="positive" />
+        <StatCard label="Forecast to submit" value={money(revisedForecast)} detail={`${money(bookedOrderIntakeYtd)} booked YTD`} tone="positive" />
+        <StatCard label="Remaining forecast" value={money(remainingForecast)} detail="Expected + inferred future OI" />
         <StatCard label="Sales inputs used" value={String(usedEntries.length)} detail="Structured signals" />
         <StatCard label="Important research" value={String(importantArticles.length)} detail="Evidence items" tone="positive" />
-        <StatCard label="Validation status" value="Ready" detail="No blockers found" tone="positive" />
       </section>
 
       <div className="contentGrid reviewGrid">
@@ -951,6 +970,8 @@ function ReviewPage({
             {[
               "Forecast remains inside the FY26/27 planning corridor.",
               "Sales intelligence has source notes and probability estimates.",
+              "One-off last-year orders are not treated as recurring demand.",
+              "Unidentified run-rate is based on YTD momentum and seasonality assumptions.",
               "Market research evidence has been marked important or irrelevant.",
               "AI reasoning explains all material forecast changes.",
               "Database upload package includes audit trail metadata.",
@@ -965,7 +986,7 @@ function ReviewPage({
 
         <section className="panel">
           <SectionHeader title="Final decision notes" />
-          <textarea defaultValue="Sales office accepts the revised OI forecast. Main upside is Vodafone private 5G demand; main downside remains renewal timing at National Grid and BT tender delay." />
+          <textarea defaultValue="Sales office accepts the revised OI forecast. Main upside is Vodafone private 5G demand and stronger YTD momentum; main downside remains renewal timing at National Grid and BT tender delay. One-off orders are excluded from recurring demand." />
           <div className="reviewStamp">
             <span className="pill positive">Within corridor</span>
             <span className="pill positive">Evidence attached</span>
@@ -996,6 +1017,18 @@ function ReviewPage({
               <td>Fiscal year</td>
               <td>FY26/27</td>
               <td>Workspace selection</td>
+              <td><span className="pill positive">Ready</span></td>
+            </tr>
+            <tr>
+              <td>Booked OI YTD</td>
+              <td>{money(bookedOrderIntakeYtd)}</td>
+              <td>Actual order intake</td>
+              <td><span className="pill positive">Locked</span></td>
+            </tr>
+            <tr>
+              <td>Remaining forecast</td>
+              <td>{money(remainingForecast)}</td>
+              <td>Named + recurring + run-rate + research</td>
               <td><span className="pill positive">Ready</span></td>
             </tr>
             <tr>
@@ -1030,7 +1063,7 @@ function SubmitPage({
   isSubmitted: boolean;
   onSubmit: () => void;
 }) {
-  const { revisedForecast } = getForecastSummary(entries, articles);
+  const { remainingForecast, revisedForecast } = getForecastSummary(entries, articles);
 
   return (
     <div className="workspaceContent">
@@ -1070,6 +1103,8 @@ function SubmitPage({
           <SectionHeader title="Upload package" />
           <div className="packageList">
             <div><strong>Forecast value</strong><span>{money(revisedForecast)}</span></div>
+            <div><strong>Booked OI YTD</strong><span>{money(bookedOrderIntakeYtd)}</span></div>
+            <div><strong>Remaining forecast</strong><span>{money(remainingForecast)}</span></div>
             <div><strong>Sales signals</strong><span>{entries.filter((entry) => entry.used).length} attached</span></div>
             <div><strong>Research evidence</strong><span>{articles.filter((article) => article.mark === "Important").length} important articles</span></div>
             <div><strong>Audit trail</strong><span>Complete</span></div>
@@ -1096,15 +1131,17 @@ function WaterfallChart({
   drivers: Array<{ label: string; value: number; type: string }>;
   revisedForecast: number;
 }) {
-  const max = 58;
+  const max = Math.max(58, Math.ceil((revisedForecast + 5) / 10) * 10);
   const min = 0;
   const scale = (value: number) => ((value - min) / (max - min)) * 100;
-  let running = baselineForecast;
+  let running = drivers[0]?.value ?? 0;
 
   return (
     <div className="waterfall">
       <div className="chartAxis">
-        {[60, 50, 40, 30, 20, 10, 0].map((tick) => (
+        {[max, max - 10, max - 20, max - 30, max - 40, max - 50, 0]
+          .filter((tick, index, ticks) => tick >= 0 && ticks.indexOf(tick) === index)
+          .map((tick) => (
           <span key={tick}>{tick}</span>
         ))}
       </div>
@@ -1139,7 +1176,7 @@ function WaterfallChart({
         <div className="barColumn">
           <div className="bar total revised" style={{ height: `${scale(revisedForecast)}%` }} />
           <strong>{revisedForecast.toFixed(1)}</strong>
-          <span>Revised forecast (v1)</span>
+          <span>Forecast to submit</span>
         </div>
       </div>
     </div>
