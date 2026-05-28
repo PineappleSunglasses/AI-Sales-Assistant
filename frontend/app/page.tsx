@@ -149,9 +149,9 @@ const workflow = [
   { id: "submit", title: "Submit", detail: "Upload & confirm" },
 ] satisfies Array<{ id: PageId; title: string; detail: string }>;
 
-const bookedOrderIntakeYtd = 18.6;
-const recurringDemandForecast = 10.8;
-const unidentifiedRunRate = 17.4;
+const recentMomentumIndex = 118;
+const recurringDemandForecast = 18.4;
+const unidentifiedRunRate = 28.6;
 const planningLow = 42;
 const planningHigh = 55;
 
@@ -347,8 +347,8 @@ function Sidebar({
             <dd>{money(planningLow)} - {money(planningHigh)}</dd>
           </div>
           <div>
-            <dt>Booked YTD</dt>
-            <dd>{money(bookedOrderIntakeYtd)}</dd>
+            <dt>Momentum Signal</dt>
+            <dd>{recentMomentumIndex}% index</dd>
           </div>
           <div>
             <dt>Last Updated</dt>
@@ -387,13 +387,13 @@ function SalesInputsTab({
       </section>
 
       <section className="statsGrid four">
-        <StatCard label="Booked OI YTD" value={money(bookedOrderIntakeYtd)} detail="First 3 months closed">
+        <StatCard label="Recent momentum signal" value={`${recentMomentumIndex}%`} detail="Current FY signal, not added">
           <Sparkline tone="neutral" />
         </StatCard>
         <StatCard label="Named opportunities" value="+EUR 3.5M" detail="Visible customer signals" tone="positive">
           <Sparkline tone="positive" />
         </StatCard>
-        <StatCard label="Unidentified run-rate" value={money(unidentifiedRunRate)} detail="AI inferred from YTD momentum" tone="neutral">
+        <StatCard label="Unidentified demand" value={money(unidentifiedRunRate)} detail="AI inferred for next FY" tone="neutral">
           <div className="miniMeter"><span /></div>
         </StatCard>
         <StatCard label="Evidence coverage" value="68%" detail="Across active signals" tone="neutral">
@@ -762,7 +762,6 @@ function getForecastSummary(entries: SalesEntry[], articles: Article[]) {
     .reduce((sum, entry) => sum + entry.impact, 0);
 
   const revisedForecast =
-    bookedOrderIntakeYtd +
     namedOpportunities +
     recurringDemandForecast +
     unidentifiedRunRate +
@@ -774,7 +773,7 @@ function getForecastSummary(entries: SalesEntry[], articles: Article[]) {
     marketImpact,
     namedOpportunities,
     revisedForecast,
-    remainingForecast: revisedForecast - bookedOrderIntakeYtd,
+    inferredAndRecurringDemand: recurringDemandForecast + unidentifiedRunRate,
   };
 }
 
@@ -791,15 +790,13 @@ function ForecastReasoningTab({
     knownRisksAndOneOffs,
     marketImpact,
     namedOpportunities,
-    remainingForecast,
     revisedForecast,
   } = getForecastSummary(entries, articles);
 
   const drivers = [
-    { label: "Booked OI YTD", value: bookedOrderIntakeYtd, type: "total" },
-    { label: "Named opps.", value: namedOpportunities, type: "up" },
+    { label: "Named opps.", value: namedOpportunities, type: "total" },
     { label: "Recurring demand", value: recurringDemandForecast, type: "up" },
-    { label: "Run-rate demand", value: unidentifiedRunRate, type: "up" },
+    { label: "Unidentified demand", value: unidentifiedRunRate, type: "up" },
     { label: "Market adj.", value: marketImpact, type: marketImpact >= 0 ? "up" : "down" },
     { label: "Risks & one-offs", value: knownRisksAndOneOffs, type: "down" },
   ];
@@ -813,14 +810,14 @@ function ForecastReasoningTab({
           <h1>{money(revisedForecast)}</h1>
         </div>
         <div className="forecastMetric">
-          <span>Already booked</span>
-          <strong className="positiveText">{money(bookedOrderIntakeYtd)}</strong>
-          <small>First 3 months</small>
+          <span>Recent momentum</span>
+          <strong className="positiveText">{recentMomentumIndex}%</strong>
+          <small>Signal only, not added</small>
         </div>
         <div className="forecastMetric">
-          <span>Remaining forecast</span>
-          <strong>{money(remainingForecast)}</strong>
-          <small>Named, recurring, run-rate, research</small>
+          <span>Inferred demand</span>
+          <strong>{money(unidentifiedRunRate)}</strong>
+          <small>Unknown future orders</small>
         </div>
         <div className="forecastMetric">
           <span>Confidence</span>
@@ -842,7 +839,7 @@ function ForecastReasoningTab({
 
       <div className="contentGrid forecastGrid">
         <section className="panel">
-          <SectionHeader title="Forecast Composition: Known, Expected, and Inferred OI" />
+          <SectionHeader title="Forecast Composition: Expected and Inferred FY26/27 OI" />
           <WaterfallChart drivers={drivers} revisedForecast={revisedForecast} />
         </section>
         <section className="panel">
@@ -861,10 +858,10 @@ function ForecastReasoningTab({
               text="Repeat business is included only where historical buying patterns support it."
             />
             <ReasonRow
-              evidence="YTD momentum"
+              evidence="Recent momentum"
               impact={unidentifiedRunRate}
               title="Unidentified demand inferred from run-rate"
-              text="Higher first-quarter bookings support an inferred pipeline for orders not yet named."
+              text="Recent order-intake momentum supports an inferred next-year demand pool, but current-year volume is not added."
             />
             <ReasonRow
               evidence="Important article"
@@ -943,7 +940,7 @@ function ReviewPage({
   articles: Article[];
   onNext: () => void;
 }) {
-  const { remainingForecast, revisedForecast } = getForecastSummary(entries, articles);
+  const { inferredAndRecurringDemand, revisedForecast } = getForecastSummary(entries, articles);
   const importantArticles = articles.filter((article) => article.mark === "Important");
   const usedEntries = entries.filter((entry) => entry.used);
 
@@ -957,8 +954,8 @@ function ReviewPage({
       </section>
 
       <section className="statsGrid four">
-        <StatCard label="Forecast to submit" value={money(revisedForecast)} detail={`${money(bookedOrderIntakeYtd)} booked YTD`} tone="positive" />
-        <StatCard label="Remaining forecast" value={money(remainingForecast)} detail="Expected + inferred future OI" />
+        <StatCard label="Forecast to submit" value={money(revisedForecast)} detail="FY26/27 only" tone="positive" />
+        <StatCard label="Recurring + inferred" value={money(inferredAndRecurringDemand)} detail="Model-estimated next FY OI" />
         <StatCard label="Sales inputs used" value={String(usedEntries.length)} detail="Structured signals" />
         <StatCard label="Important research" value={String(importantArticles.length)} detail="Evidence items" tone="positive" />
       </section>
@@ -971,7 +968,8 @@ function ReviewPage({
               "Forecast remains inside the FY26/27 planning corridor.",
               "Sales intelligence has source notes and probability estimates.",
               "One-off last-year orders are not treated as recurring demand.",
-              "Unidentified run-rate is based on YTD momentum and seasonality assumptions.",
+              "Current-year order intake is used only as a momentum signal, not as forecast volume.",
+              "Unidentified demand is based on momentum and seasonality assumptions.",
               "Market research evidence has been marked important or irrelevant.",
               "AI reasoning explains all material forecast changes.",
               "Database upload package includes audit trail metadata.",
@@ -986,7 +984,7 @@ function ReviewPage({
 
         <section className="panel">
           <SectionHeader title="Final decision notes" />
-          <textarea defaultValue="Sales office accepts the revised OI forecast. Main upside is Vodafone private 5G demand and stronger YTD momentum; main downside remains renewal timing at National Grid and BT tender delay. One-off orders are excluded from recurring demand." />
+          <textarea defaultValue="Sales office accepts the revised OI forecast. Main upside is Vodafone private 5G demand and stronger recent momentum; main downside remains renewal timing at National Grid and BT tender delay. One-off orders are excluded from recurring demand." />
           <div className="reviewStamp">
             <span className="pill positive">Within corridor</span>
             <span className="pill positive">Evidence attached</span>
@@ -1020,15 +1018,15 @@ function ReviewPage({
               <td><span className="pill positive">Ready</span></td>
             </tr>
             <tr>
-              <td>Booked OI YTD</td>
-              <td>{money(bookedOrderIntakeYtd)}</td>
-              <td>Actual order intake</td>
-              <td><span className="pill positive">Locked</span></td>
+              <td>Recent momentum signal</td>
+              <td>{recentMomentumIndex}% index</td>
+              <td>Current-year order intake pattern</td>
+              <td><span className="pill neutral">Signal only</span></td>
             </tr>
             <tr>
-              <td>Remaining forecast</td>
-              <td>{money(remainingForecast)}</td>
-              <td>Named + recurring + run-rate + research</td>
+              <td>Recurring + inferred demand</td>
+              <td>{money(inferredAndRecurringDemand)}</td>
+              <td>Model-estimated next-year OI</td>
               <td><span className="pill positive">Ready</span></td>
             </tr>
             <tr>
@@ -1063,7 +1061,7 @@ function SubmitPage({
   isSubmitted: boolean;
   onSubmit: () => void;
 }) {
-  const { remainingForecast, revisedForecast } = getForecastSummary(entries, articles);
+  const { inferredAndRecurringDemand, revisedForecast } = getForecastSummary(entries, articles);
 
   return (
     <div className="workspaceContent">
@@ -1103,8 +1101,8 @@ function SubmitPage({
           <SectionHeader title="Upload package" />
           <div className="packageList">
             <div><strong>Forecast value</strong><span>{money(revisedForecast)}</span></div>
-            <div><strong>Booked OI YTD</strong><span>{money(bookedOrderIntakeYtd)}</span></div>
-            <div><strong>Remaining forecast</strong><span>{money(remainingForecast)}</span></div>
+            <div><strong>Momentum signal</strong><span>{recentMomentumIndex}% index</span></div>
+            <div><strong>Recurring + inferred</strong><span>{money(inferredAndRecurringDemand)}</span></div>
             <div><strong>Sales signals</strong><span>{entries.filter((entry) => entry.used).length} attached</span></div>
             <div><strong>Research evidence</strong><span>{articles.filter((article) => article.mark === "Important").length} important articles</span></div>
             <div><strong>Audit trail</strong><span>Complete</span></div>
