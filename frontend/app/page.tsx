@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 type TabId = "inputs" | "research" | "forecast";
+type PageId = TabId | "review" | "submit";
 type UserMark = "Important" | "Neutral" | "Irrelevant";
 type Tone = "positive" | "negative" | "neutral";
 
@@ -28,12 +29,6 @@ type Article = {
   relevance: number;
   mark: UserMark;
 };
-
-const tabs: Array<{ id: TabId; label: string }> = [
-  { id: "inputs", label: "Sales Inputs" },
-  { id: "research", label: "Market Research" },
-  { id: "forecast", label: "Forecast Reasoning" },
-];
 
 const initialSalesEntries: SalesEntry[] = [
   {
@@ -147,12 +142,12 @@ const initialArticles: Article[] = [
 ];
 
 const workflow = [
-  { id: "inputs", title: "Inputs", detail: "Sales intelligence" },
+  { id: "inputs", title: "Input", detail: "Sales intelligence" },
   { id: "research", title: "Research", detail: "Market & news" },
   { id: "forecast", title: "Forecast", detail: "AI reasoning" },
   { id: "review", title: "Review", detail: "Validate & refine" },
   { id: "submit", title: "Submit", detail: "Upload & confirm" },
-];
+] satisfies Array<{ id: PageId; title: string; detail: string }>;
 
 const baselineForecast = 45;
 const insiderImpact = 1.6;
@@ -258,13 +253,50 @@ function SectionHeader({
   );
 }
 
-function Sidebar({ activeTab }: { activeTab: TabId }) {
-  const activeIndex = activeTab === "inputs" ? 0 : activeTab === "research" ? 1 : 2;
+function FlowFooter({
+  nextLabel,
+  onNext,
+  secondary,
+}: {
+  nextLabel: string;
+  onNext: () => void;
+  secondary?: React.ReactNode;
+}) {
+  return (
+    <section className="flowFooter">
+      <div>
+        <strong>Step handoff</strong>
+        <p>Use this button to mark the current page complete and move to the next page.</p>
+      </div>
+      <div className="buttonRow">
+        {secondary}
+        <button className="primaryButton" onClick={onNext} type="button">
+          {nextLabel}
+        </button>
+      </div>
+    </section>
+  );
+}
 
+function Sidebar({
+  activePage,
+  completedPages,
+  onNavigate,
+}: {
+  activePage: PageId;
+  completedPages: PageId[];
+  onNavigate: (page: PageId) => void;
+}) {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <span className="brandMark">AI</span>
+        <span className="brandMark" aria-label="Rohde and Schwarz logo">
+          <svg viewBox="0 0 42 42" role="img" aria-hidden="true">
+            <path d="M21 2.5 39.5 21 21 39.5 2.5 21 21 2.5Z" />
+            <path d="M21 7.5 34.5 21 21 34.5 7.5 21 21 7.5Z" />
+            <text x="21" y="24.6">R&amp;S</text>
+          </svg>
+        </span>
         <span>AI Sales Assistant</span>
       </div>
 
@@ -288,20 +320,22 @@ function Sidebar({ activeTab }: { activeTab: TabId }) {
 
       <nav className="workflowNav" aria-label="Forecast workflow">
         {workflow.map((step, index) => {
-          const isActive = index === activeIndex;
-          const isDone = index < activeIndex;
+          const isActive = activePage === step.id;
+          const isDone = completedPages.includes(step.id);
 
           return (
-            <div
+            <button
               className={classNames("workflowItem", isActive && "active", isDone && "done")}
+              onClick={() => onNavigate(step.id)}
               key={step.title}
+              type="button"
             >
               <span className="workflowNumber">{isDone ? "OK" : String(index + 1)}</span>
               <span>
                 <strong>{step.title}</strong>
                 <small>{step.detail}</small>
               </span>
-            </div>
+            </button>
           );
         })}
       </nav>
@@ -335,47 +369,14 @@ function Sidebar({ activeTab }: { activeTab: TabId }) {
   );
 }
 
-function TopTabs({
-  activeTab,
-  onTabChange,
-}: {
-  activeTab: TabId;
-  onTabChange: (tab: TabId) => void;
-}) {
-  return (
-    <header className="topbar">
-      <div className="tabs" role="tablist" aria-label="AI Sales Assistant workspaces">
-        {tabs.map((tab) => (
-          <button
-            aria-selected={activeTab === tab.id}
-            className={classNames("tab", activeTab === tab.id && "active")}
-            key={tab.id}
-            onClick={() => onTabChange(tab.id)}
-            role="tab"
-            type="button"
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      <div className="topActions">
-        <button className="iconButton" type="button" title="Help">
-          ?
-        </button>
-        <button className="outlineButton" type="button">
-          Filters
-        </button>
-      </div>
-    </header>
-  );
-}
-
 function SalesInputsTab({
   entries,
   onAddEntry,
+  onNext,
 }: {
   entries: SalesEntry[];
   onAddEntry: (entry: Omit<SalesEntry, "id">) => void;
+  onNext: () => void;
 }) {
   const [sourceNote, setSourceNote] = useState(
     "Vodafone UK is moving ahead with private 5G across their UK manufacturing sites. They expect to place orders in H1 FY26/27. Budget is approved.",
@@ -565,6 +566,7 @@ function SalesInputsTab({
           </tbody>
         </table>
       </section>
+      <FlowFooter nextLabel="Next: Market Research" onNext={onNext} />
     </div>
   );
 }
@@ -605,9 +607,11 @@ function SalesEntriesTable({ entries }: { entries: SalesEntry[] }) {
 function MarketResearchTab({
   articles,
   onMarkArticle,
+  onNext,
 }: {
   articles: Article[];
   onMarkArticle: (articleId: number, mark: UserMark) => void;
+  onNext: () => void;
 }) {
   const importantCount = articles.filter((article) => article.mark === "Important").length;
   const ignoredCount = articles.filter((article) => article.mark === "Irrelevant").length;
@@ -744,17 +748,12 @@ function MarketResearchTab({
           </div>
         </section>
       </div>
+      <FlowFooter nextLabel="Next: Forecast" onNext={onNext} />
     </div>
   );
 }
 
-function ForecastReasoningTab({
-  entries,
-  articles,
-}: {
-  entries: SalesEntry[];
-  articles: Article[];
-}) {
+function getForecastSummary(entries: SalesEntry[], articles: Article[]) {
   const marketImpact = articles
     .filter((article) => article.mark === "Important")
     .reduce((sum, article) => sum + article.impact, 0);
@@ -762,6 +761,28 @@ function ForecastReasoningTab({
   const customerIntent = entries
     .filter((entry) => entry.used && entry.type === "Customer likely to order")
     .reduce((sum, entry) => sum + entry.impact, 0);
+
+  const revisedForecast =
+    baselineForecast + customerIntent + insiderImpact + marketImpact + divisionAdjustment + riskDiscount;
+
+  return {
+    customerIntent,
+    marketImpact,
+    revisedForecast,
+    totalChange: revisedForecast - baselineForecast,
+  };
+}
+
+function ForecastReasoningTab({
+  entries,
+  articles,
+  onNext,
+}: {
+  entries: SalesEntry[];
+  articles: Article[];
+  onNext: () => void;
+}) {
+  const { customerIntent, marketImpact, revisedForecast, totalChange } = getForecastSummary(entries, articles);
 
   const drivers = [
     { label: "Baseline forecast (v0)", value: baselineForecast, type: "total" },
@@ -771,8 +792,6 @@ function ForecastReasoningTab({
     { label: "Division adjustment", value: divisionAdjustment, type: "up" },
     { label: "Risk discount", value: riskDiscount, type: "down" },
   ];
-  const revisedForecast = baselineForecast + customerIntent + insiderImpact + marketImpact + divisionAdjustment + riskDiscount;
-  const totalChange = revisedForecast - baselineForecast;
   const confidence = revisedForecast >= planningLow && revisedForecast <= planningHigh ? "High" : "Medium";
 
   return (
@@ -891,6 +910,185 @@ function ForecastReasoningTab({
           </div>
         </section>
       </div>
+      <FlowFooter
+        nextLabel="Next: Review"
+        onNext={onNext}
+        secondary={<button className="outlineButton" type="button">Request revision</button>}
+      />
+    </div>
+  );
+}
+
+function ReviewPage({
+  entries,
+  articles,
+  onNext,
+}: {
+  entries: SalesEntry[];
+  articles: Article[];
+  onNext: () => void;
+}) {
+  const { revisedForecast, totalChange } = getForecastSummary(entries, articles);
+  const importantArticles = articles.filter((article) => article.mark === "Important");
+  const usedEntries = entries.filter((entry) => entry.used);
+
+  return (
+    <div className="workspaceContent">
+      <section className="pageHeader">
+        <div>
+          <h1>Review forecast package</h1>
+          <p>Check the forecast, evidence, and audit readiness before preparing the database upload.</p>
+        </div>
+      </section>
+
+      <section className="statsGrid four">
+        <StatCard label="Forecast to submit" value={money(revisedForecast)} detail={`${compactImpact(totalChange)} vs baseline`} tone="positive" />
+        <StatCard label="Sales inputs used" value={String(usedEntries.length)} detail="Structured signals" />
+        <StatCard label="Important research" value={String(importantArticles.length)} detail="Evidence items" tone="positive" />
+        <StatCard label="Validation status" value="Ready" detail="No blockers found" tone="positive" />
+      </section>
+
+      <div className="contentGrid reviewGrid">
+        <section className="panel">
+          <SectionHeader title="Review checklist" />
+          <div className="checklist">
+            {[
+              "Forecast remains inside the FY26/27 planning corridor.",
+              "Sales intelligence has source notes and probability estimates.",
+              "Market research evidence has been marked important or irrelevant.",
+              "AI reasoning explains all material forecast changes.",
+              "Database upload package includes audit trail metadata.",
+            ].map((item) => (
+              <label className="checkItem" key={item}>
+                <input defaultChecked type="checkbox" />
+                <span>{item}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <SectionHeader title="Final decision notes" />
+          <textarea defaultValue="Sales office accepts the revised OI forecast. Main upside is Vodafone private 5G demand; main downside remains renewal timing at National Grid and BT tender delay." />
+          <div className="reviewStamp">
+            <span className="pill positive">Within corridor</span>
+            <span className="pill positive">Evidence attached</span>
+            <span className="pill neutral">Human reviewed</span>
+          </div>
+        </section>
+      </div>
+
+      <section className="panel">
+        <SectionHeader title="Submission preview" />
+        <table className="dataTable">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+              <th>Source</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Sales office</td>
+              <td>RSGBR - London</td>
+              <td>Workspace selection</td>
+              <td><span className="pill positive">Ready</span></td>
+            </tr>
+            <tr>
+              <td>Fiscal year</td>
+              <td>FY26/27</td>
+              <td>Workspace selection</td>
+              <td><span className="pill positive">Ready</span></td>
+            </tr>
+            <tr>
+              <td>Order Intake forecast</td>
+              <td>{money(revisedForecast)}</td>
+              <td>AI reasoning package</td>
+              <td><span className="pill positive">Ready</span></td>
+            </tr>
+            <tr>
+              <td>Planning corridor</td>
+              <td>{money(planningLow)} - {money(planningHigh)}</td>
+              <td>BP corridor</td>
+              <td><span className="pill positive">Within range</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <FlowFooter nextLabel="Next: Submit" onNext={onNext} />
+    </div>
+  );
+}
+
+function SubmitPage({
+  entries,
+  articles,
+  isSubmitted,
+  onSubmit,
+}: {
+  entries: SalesEntry[];
+  articles: Article[];
+  isSubmitted: boolean;
+  onSubmit: () => void;
+}) {
+  const { revisedForecast } = getForecastSummary(entries, articles);
+
+  return (
+    <div className="workspaceContent">
+      <section className="pageHeader">
+        <div>
+          <h1>Submit forecast</h1>
+          <p>Upload the reviewed forecast package once the sales office and AI assistant agree on the number.</p>
+        </div>
+      </section>
+
+      <section className="submitHero panel">
+        <div>
+          <p className="meta">Ready-to-upload forecast</p>
+          <h2>{money(revisedForecast)}</h2>
+          <span className="pill positive">RSGBR - London / FY26/27</span>
+        </div>
+        <div className="submitStatus">
+          <strong>{isSubmitted ? "Submitted" : "Awaiting upload"}</strong>
+          <p>
+            {isSubmitted
+              ? "The local forecast package has been marked as uploaded in this prototype."
+              : "Press upload to mark Submit complete. The step turns green only after that action."}
+          </p>
+        </div>
+        <button
+          className={isSubmitted ? "disabledButton" : "primaryButton"}
+          disabled={isSubmitted}
+          onClick={onSubmit}
+          type="button"
+        >
+          {isSubmitted ? "Upload complete" : "Upload forecast to database"}
+        </button>
+      </section>
+
+      <div className="contentGrid reviewGrid">
+        <section className="panel">
+          <SectionHeader title="Upload package" />
+          <div className="packageList">
+            <div><strong>Forecast value</strong><span>{money(revisedForecast)}</span></div>
+            <div><strong>Sales signals</strong><span>{entries.filter((entry) => entry.used).length} attached</span></div>
+            <div><strong>Research evidence</strong><span>{articles.filter((article) => article.mark === "Important").length} important articles</span></div>
+            <div><strong>Audit trail</strong><span>Complete</span></div>
+          </div>
+        </section>
+
+        <section className="panel">
+          <SectionHeader title="Post-submit routing" />
+          <div className="packageList">
+            <div><strong>Destination</strong><span>Forecast database</span></div>
+            <div><strong>Aggregation dashboard</strong><span>Handled by central planning team</span></div>
+            <div><strong>Submission mode</strong><span>Prototype action only</span></div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -980,15 +1178,33 @@ function ReasonRow({
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabId>("forecast");
+  const [activePage, setActivePage] = useState<PageId>("inputs");
+  const [completedPages, setCompletedPages] = useState<PageId[]>([]);
   const [entries, setEntries] = useState(initialSalesEntries);
   const [articles, setArticles] = useState(initialArticles);
 
+  const completePage = (page: PageId) => {
+    setCompletedPages((currentPages) =>
+      currentPages.includes(page) ? currentPages : [...currentPages, page],
+    );
+  };
+
+  const completeAndGoNext = (page: PageId) => {
+    completePage(page);
+    const currentIndex = workflow.findIndex((step) => step.id === page);
+    const nextStep = workflow[currentIndex + 1];
+
+    if (nextStep) {
+      setActivePage(nextStep.id);
+    }
+  };
+
   const activeView = useMemo(() => {
-    if (activeTab === "inputs") {
+    if (activePage === "inputs") {
       return (
         <SalesInputsTab
           entries={entries}
+          onNext={() => completeAndGoNext("inputs")}
           onAddEntry={(entry) => {
             setEntries((currentEntries) => [
               { ...entry, id: currentEntries.length + 1 },
@@ -999,10 +1215,11 @@ export default function Home() {
       );
     }
 
-    if (activeTab === "research") {
+    if (activePage === "research") {
       return (
         <MarketResearchTab
           articles={articles}
+          onNext={() => completeAndGoNext("research")}
           onMarkArticle={(articleId, mark) => {
             setArticles((currentArticles) =>
               currentArticles.map((article) =>
@@ -1014,14 +1231,44 @@ export default function Home() {
       );
     }
 
-    return <ForecastReasoningTab articles={articles} entries={entries} />;
-  }, [activeTab, articles, entries]);
+    if (activePage === "forecast") {
+      return (
+        <ForecastReasoningTab
+          articles={articles}
+          entries={entries}
+          onNext={() => completeAndGoNext("forecast")}
+        />
+      );
+    }
+
+    if (activePage === "review") {
+      return (
+        <ReviewPage
+          articles={articles}
+          entries={entries}
+          onNext={() => completeAndGoNext("review")}
+        />
+      );
+    }
+
+    return (
+      <SubmitPage
+        articles={articles}
+        entries={entries}
+        isSubmitted={completedPages.includes("submit")}
+        onSubmit={() => completePage("submit")}
+      />
+    );
+  }, [activePage, articles, completedPages, entries]);
 
   return (
     <main className="appShell">
-      <Sidebar activeTab={activeTab} />
+      <Sidebar
+        activePage={activePage}
+        completedPages={completedPages}
+        onNavigate={setActivePage}
+      />
       <section className="mainSurface">
-        <TopTabs activeTab={activeTab} onTabChange={setActiveTab} />
         {activeView}
       </section>
     </main>
