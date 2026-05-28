@@ -63,34 +63,20 @@ button {
 
 .brandMark {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   place-items: center;
   flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #ffffff;
 }
 
-.brandMark svg {
+.brandMark img {
   display: block;
-  width: 38px;
-  height: 38px;
-}
-
-.brandMark path:first-child {
-  fill: none;
-  stroke: #ffffff;
-  stroke-width: 2.4;
-}
-
-.brandMark path:nth-child(2) {
-  fill: #ffffff;
-}
-
-.brandMark text {
-  fill: #0e2137;
-  font-size: 10px;
-  font-weight: 850;
-  letter-spacing: 0;
-  text-anchor: middle;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 .selectorGroup {

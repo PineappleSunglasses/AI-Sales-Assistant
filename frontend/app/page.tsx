@@ -291,11 +291,7 @@ function Sidebar({
     <aside className="sidebar">
       <div className="brand">
         <span className="brandMark" aria-label="Rohde and Schwarz logo">
-          <svg viewBox="0 0 42 42" role="img" aria-hidden="true">
-            <path d="M21 2.5 39.5 21 21 39.5 2.5 21 21 2.5Z" />
-            <path d="M21 7.5 34.5 21 21 34.5 7.5 21 21 7.5Z" />
-            <text x="21" y="24.6">R&amp;S</text>
-          </svg>
+          <img alt="" src="/rohde-schwarz-logo.png" />
         </span>
         <span>AI Sales Assistant</span>
       </div>
